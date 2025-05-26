@@ -2,6 +2,13 @@ import multiprocessing
 import random
 import time
 
+# Códigos ANSI para colores
+RESET = "\033[0m"
+FONDO_BLANCO = "\033[47m"
+FONDO_NEGRO = "\033[100m"
+VACAS = "\033[97mV"     # Letra blanca
+LEOPARDO = "\033[91mL"  # Letra roja
+
 TAM = 8
 
 def es_casilla_negra(x, y):
@@ -23,8 +30,21 @@ def colocar_leopardo(tablero):
     return fila, col
 
 def imprimir_tablero(tablero):
-    for fila in tablero:
-        print(" ".join(fila))
+    print("    " + "  ".join([str(c) for c in range(TAM)]))
+    for f in range(TAM):
+        fila_str = f"{f} |"
+        for c in range(TAM):
+            casilla = tablero[f][c]
+            fondo = FONDO_NEGRO if es_casilla_negra(f, c) else FONDO_BLANCO
+
+            if casilla == "V":
+                ficha = VACAS
+            elif casilla == "L":
+                ficha = LEOPARDO
+            else:
+                ficha = " "
+            fila_str += f"{fondo} {ficha} {RESET}"
+        print(fila_str)
     print()
 
 # Subproceso para vacas
@@ -97,6 +117,21 @@ def mover_pieza(tablero, origen, destino):
     tablero[f1][c1] = "."
 
 # Juego principal
+def obtener_movimientos_leopardo(tablero, pos, pasos=2):
+    f, c = pos
+    posibles = []
+    desplazamientos = []
+    if pasos == 2:
+        desplazamientos = [(-2, -2), (-2, 2), (2, -2), (2, 2)]
+    elif pasos == 1:
+        desplazamientos = [(-1, -1), (-1, 1), (1, -1), (1, 1)]
+
+    for df, dc in desplazamientos:
+        nf, nc = f + df, c + dc
+        if 0 <= nf < TAM and 0 <= nc < TAM and tablero[nf][nc] == ".":
+            posibles.append((nf, nc))
+    return posibles
+
 def juego_principal():
     tablero = crear_tablero()
     pos_leopardo = colocar_leopardo(tablero)
@@ -112,42 +147,42 @@ def juego_principal():
             if turno % 2 == 0:
                 print("Turno del leopardo")
                 print(f"El leopardo está en la casilla: {pos_leopardo}")
-                movimientos = obtener_movimientos_leopardo(tablero, pos_leopardo)
+
+                # Elegir pasos
+                pasos = 0
+                while pasos not in ["1", "2"]:
+                    pasos = input("¿Deseas mover 1 o 2 casillas diagonalmente? (1/2): ")
+
+                pasos = int(pasos)
+                movimientos = obtener_movimientos_leopardo(tablero, pos_leopardo, pasos)
                 if not movimientos:
                     print("¡Las vacas ganan! El leopardo está acorralado.")
                     break
 
-                opciones = {
-                    "1": (-2, -2),  # ↖
-                    "2": (-2, 2),   # ↗
-                    "3": (2, -2),   # ↙
-                    "4": (2, 2)     # ↘
-                }
+                # Mapear opciones según movimientos posibles
+                opciones = {}
+                for i, (nf, nc) in enumerate(movimientos, 1):
+                    opciones[str(i)] = (nf, nc)
 
                 print("Opciones de movimiento:")
-                for key, (df, dc) in opciones.items():
-                    nf, nc = pos_leopardo[0] + df, pos_leopardo[1] + dc
-                    if 0 <= nf < TAM and 0 <= nc < TAM and tablero[nf][nc] == ".":
-                        print(f"{key}: mover a ({nf}, {nc})")
+                for key, (nf, nc) in opciones.items():
+                    print(f"{key}: mover a ({nf}, {nc})")
 
                 opcion_valida = False
                 while not opcion_valida:
-                    eleccion = input("Elige una opción (1-4): ")
+                    eleccion = input(f"Elige una opción (1-{len(opciones)}): ")
                     if eleccion in opciones:
-                        df, dc = opciones[eleccion]
-                        nf, nc = pos_leopardo[0] + df, pos_leopardo[1] + dc
-                        if 0 <= nf < TAM and 0 <= nc < TAM and tablero[nf][nc] == ".":
-                            mover_pieza(tablero, pos_leopardo, (nf, nc))
-                            pos_leopardo = (nf, nc)
-                            opcion_valida = True
-                        else:
-                            print("Movimiento inválido. Casilla ocupada o fuera de rango.")
+                        destino = opciones[eleccion]
+                        mover_pieza(tablero, pos_leopardo, destino)
+                        pos_leopardo = destino
+                        opcion_valida = True
                     else:
                         print("Opción no válida. Intenta de nuevo.")
 
                 if pos_leopardo[0] == 7:
                     print("¡El leopardo gana!")
                     break
+
             else:
                 print("Turno de las vacas")
                 parent_conn.send({"type": "state", "board": tablero})
@@ -163,6 +198,7 @@ def juego_principal():
         print("\nEl jugador se rindió. ¡Las vacas ganan automáticamente!")
     finally:
         proceso.terminate()
+
 
 
 
